@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/mevdschee/p2pquic-go/pkg/p2pquic"
 	"github.com/mevdschee/p2pquic-go/pkg/signaling"
 )
 
@@ -28,7 +29,7 @@ func (h *HTTPServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var peer signaling.PeerInfo
+	var peer p2pquic.PeerInfo
 	if err := json.NewDecoder(r.Body).Decode(&peer); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

@@ -3,37 +3,26 @@ package signaling
 import (
 	"sync"
 	"time"
+
+	"github.com/mevdschee/p2pquic-go/pkg/p2pquic"
 )
-
-// Candidate represents a NAT traversal candidate
-type Candidate struct {
-	IP   string `json:"ip"`
-	Port int    `json:"port"`
-}
-
-// PeerInfo stores information about a peer
-type PeerInfo struct {
-	ID         string      `json:"id"`
-	Candidates []Candidate `json:"candidates"`
-	Timestamp  time.Time   `json:"timestamp"`
-}
 
 // Server manages peer registration and discovery
 type Server struct {
-	peers map[string]*PeerInfo
+	peers map[string]*p2pquic.PeerInfo
 	mu    sync.RWMutex
 }
 
 // NewServer creates a new signaling server
 func NewServer() *Server {
 	return &Server{
-		peers: make(map[string]*PeerInfo),
+		peers: make(map[string]*p2pquic.PeerInfo),
 	}
 }
 
 // Register registers a peer with its candidates
-func (s *Server) Register(peerID string, candidates []Candidate) error {
-	peer := &PeerInfo{
+func (s *Server) Register(peerID string, candidates []p2pquic.Candidate) error {
+	peer := &p2pquic.PeerInfo{
 		ID:         peerID,
 		Candidates: candidates,
 		Timestamp:  time.Now(),
@@ -47,7 +36,7 @@ func (s *Server) Register(peerID string, candidates []Candidate) error {
 }
 
 // GetPeer retrieves peer information by ID
-func (s *Server) GetPeer(peerID string) (*PeerInfo, bool) {
+func (s *Server) GetPeer(peerID string) (*p2pquic.PeerInfo, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -56,11 +45,11 @@ func (s *Server) GetPeer(peerID string) (*PeerInfo, bool) {
 }
 
 // GetAllPeers retrieves all registered peers
-func (s *Server) GetAllPeers() []*PeerInfo {
+func (s *Server) GetAllPeers() []*p2pquic.PeerInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	peerList := make([]*PeerInfo, 0, len(s.peers))
+	peerList := make([]*p2pquic.PeerInfo, 0, len(s.peers))
 	for _, peer := range s.peers {
 		peerList = append(peerList, peer)
 	}
