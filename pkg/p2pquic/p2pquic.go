@@ -31,9 +31,6 @@ func NewPeer(config Config) (*Peer, error) {
 	if config.PeerID == "" {
 		return nil, fmt.Errorf("peer ID is required")
 	}
-	if config.LocalPort == 0 {
-		config.LocalPort = 9000
-	}
 	if config.SignalingURL == "" {
 		config.SignalingURL = "http://localhost:8080"
 	}
