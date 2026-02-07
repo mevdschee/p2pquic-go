@@ -109,7 +109,7 @@ func (p *Peer) Listen() error {
 		return fmt.Errorf("failed to start QUIC listener: %w", err)
 	}
 
-	log.Printf("QUIC listener started on port %d", p.config.LocalPort)
+	log.Printf("QUIC listener started on port %d", p.GetActualPort())
 	return nil
 }
 
