@@ -44,17 +44,18 @@ func NewPeer(config Config) (*Peer, error) {
 	return peer, nil
 }
 
-// DiscoverCandidates discovers NAT traversal candidates
+// DiscoverCandidates discovers NAT traversal candidates.
+// Must be called after Listen() to ensure the actual port is known.
 func (p *Peer) DiscoverCandidates() ([]Candidate, error) {
+	if p.udpConn == nil {
+		return nil, fmt.Errorf("must call Listen() before DiscoverCandidates() to ensure correct port is reported")
+	}
+
 	var candidates []Candidate
 
-	// Get local port
-	localPort := p.config.LocalPort
-	if p.udpConn != nil {
-		// Use actual port from UDP connection
-		addr := p.udpConn.LocalAddr().(*net.UDPAddr)
-		localPort = addr.Port
-	}
+	// Get local port from UDP connection
+	addr := p.udpConn.LocalAddr().(*net.UDPAddr)
+	localPort := addr.Port
 
 	// Try STUN discovery if enabled - use temporary socket to avoid blocking
 	if p.config.EnableSTUN {
