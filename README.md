@@ -260,9 +260,10 @@ type Config struct {
 Main peer interface:
 
 - `NewPeer(config Config) (*Peer, error)` - Create a new peer
-- `DiscoverCandidates() ([]Candidate, error)` - Discover NAT candidates
+- `DiscoverCandidates() ([]Candidate, error)` - Discover NAT candidates (run after `Listen` or `Bind`)
 - `Register() error` - Register with signaling server
 - `Listen() error` - Start listening for incoming connections
+- `Bind() error` - Bind to a specific port
 - `Accept(ctx context.Context) (*quic.Conn, error)` - Accept incoming connection
 - `Connect(remotePeerID string, opts ...ConnectOption) (*quic.Conn, error)` - Connect to remote peer
 - `ContinuousHolePunch(ctx context.Context)` - Continuously punch holes to discovered peers
