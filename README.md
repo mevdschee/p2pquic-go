@@ -1,6 +1,6 @@
 # p2pquic-go
 
-p2pquic-go is a peer-to-peer QUIC library in Go that enables direct connections between peers behind NAT using UDP hole-punching and QUIC transport. It provides both a reusable library and command-line tools for testing.
+This is a peer-to-peer QUIC library in Go that enables direct connections between peers behind NAT using UDP hole-punching and QUIC transport. It provides both a reusable library and command-line tools for testing.
 
 ## Features
 
