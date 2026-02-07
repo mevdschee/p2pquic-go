@@ -45,10 +45,10 @@ func NewPeer(config Config) (*Peer, error) {
 }
 
 // DiscoverCandidates discovers NAT traversal candidates.
-// Must be called after Listen() to ensure the actual port is known.
+// Must be called after Listen() or Bind() to ensure the actual port is known.
 func (p *Peer) DiscoverCandidates() ([]Candidate, error) {
 	if p.udpConn == nil {
-		return nil, fmt.Errorf("must call Listen() before DiscoverCandidates() to ensure correct port is reported")
+		return nil, fmt.Errorf("must call Listen() or Bind() before DiscoverCandidates() to ensure correct port is reported")
 	}
 
 	var candidates []Candidate
@@ -111,6 +111,22 @@ func (p *Peer) Listen() error {
 	}
 
 	log.Printf("QUIC listener started on port %d", p.GetActualPort())
+	return nil
+}
+
+// Bind creates the UDP socket without starting a QUIC listener
+// Use this for clients that only need to dial out, not accept connections
+func (p *Peer) Bind() error {
+	udpAddr := &net.UDPAddr{
+		IP:   net.IPv4zero,
+		Port: p.config.LocalPort,
+	}
+	var err error
+	p.udpConn, err = net.ListenUDP("udp4", udpAddr)
+	if err != nil {
+		return fmt.Errorf("failed to create UDP socket: %w", err)
+	}
+	log.Printf("UDP socket bound on port %d", p.GetActualPort())
 	return nil
 }
 
