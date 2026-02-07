@@ -173,24 +173,20 @@ The HTTP server in `cmd/p2pquic-signal` is just a thin wrapper around this packa
 Test peer-to-peer connections:
 
 **Server Mode:**
+
 ```bash
 # Build
 go build ./cmd/p2pquic-test
 
 # Run server peer (defaults to ID "server")
-./p2pquic-test -mode server -port 9000 -signaling http://your-server:8080
-
-# Or with custom ID
-./p2pquic-test -mode server -id myserver -port 9000 -signaling http://your-server:8080
+./p2pquic-test -mode server -port 0 -signaling http://localhost:8080
 ```
 
 **Client Mode:**
+
 ```bash
 # Run client peer connecting to "server" (defaults to ID "client")
-./p2pquic-test -mode client -remote server -port 9001 -signaling http://your-server:8080
-
-# Or with custom ID connecting to "myserver"
-./p2pquic-test -mode client -id myclient -remote myserver -port 9001 -signaling http://your-server:8080
+./p2pquic-test -mode client -remote server -port 0 -signaling http://localhost:8080
 ```
 
 **Flags:**

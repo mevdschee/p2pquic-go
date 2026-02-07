@@ -47,7 +47,22 @@ func main() {
 	}
 	defer peer.Close()
 
-	// Discover candidates
+	// Server mode: Listen() first (creates QUIC listener)
+	// Client mode: Bind() first (creates UDP socket only)
+	// This must be done before DiscoverCandidates() to know the actual port
+	if *mode == "server" {
+		log.Println("Starting QUIC listener...")
+		if err := peer.Listen(); err != nil {
+			log.Fatalf("Failed to start listening: %v", err)
+		}
+	} else {
+		log.Println("Binding UDP socket...")
+		if err := peer.Bind(); err != nil {
+			log.Fatalf("Failed to bind: %v", err)
+		}
+	}
+
+	// Discover candidates (requires Listen/Bind to be called first)
 	log.Println("Discovering NAT candidates...")
 	candidates, err := peer.DiscoverCandidates()
 	if err != nil {
@@ -77,10 +92,7 @@ func main() {
 }
 
 func runServer(peer *p2pquic.Peer) {
-	// Start listening
-	if err := peer.Listen(); err != nil {
-		log.Fatalf("Failed to start listening: %v", err)
-	}
+	// Listen() was already called in main() before DiscoverCandidates()
 
 	// Start continuous hole-punching in background
 	ctx := context.Background()
