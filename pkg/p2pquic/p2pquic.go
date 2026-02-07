@@ -51,18 +51,27 @@ func NewPeer(config Config) (*Peer, error) {
 func (p *Peer) DiscoverCandidates() ([]Candidate, error) {
 	var candidates []Candidate
 
-	// Try STUN discovery if enabled
+	// Get local port
+	localPort := p.config.LocalPort
+	if p.udpConn != nil {
+		// Use actual port from UDP connection
+		addr := p.udpConn.LocalAddr().(*net.UDPAddr)
+		localPort = addr.Port
+	}
+
+	// Try STUN discovery if enabled - use temporary socket to avoid blocking
 	if p.config.EnableSTUN {
-		if stunCand, err := discoverPublicIP(p.config.LocalPort); err == nil {
+		log.Printf("Attempting STUN discovery...")
+		if stunCand, err := discoverPublicIP(localPort); err == nil {
 			log.Printf("STUN discovered: %s:%d", stunCand.IP, stunCand.Port)
 			candidates = append(candidates, *stunCand)
 		} else {
-			log.Printf("STUN discovery failed: %v", err)
+			log.Printf("STUN discovery failed: %v (continuing with local candidates)", err)
 		}
 	}
 
 	// Add local candidates
-	localCands := getLocalCandidates(p.config.LocalPort)
+	localCands := getLocalCandidates(localPort)
 	candidates = append(candidates, localCands...)
 
 	p.candidates = candidates
@@ -91,7 +100,13 @@ func (p *Peer) Listen() error {
 		return fmt.Errorf("failed to create UDP socket: %w", err)
 	}
 
-	p.quicListener, err = quic.Listen(p.udpConn, p.tlsConfig, nil)
+	// Configure QUIC with extended idle timeout and keepalive
+	quicConfig := &quic.Config{
+		MaxIdleTimeout:  5 * time.Minute,  // Extended idle timeout
+		KeepAlivePeriod: 30 * time.Second, // Send keepalive pings
+	}
+
+	p.quicListener, err = quic.Listen(p.udpConn, p.tlsConfig, quicConfig)
 	if err != nil {
 		p.udpConn.Close()
 		return fmt.Errorf("failed to start QUIC listener: %w", err)
@@ -102,7 +117,7 @@ func (p *Peer) Listen() error {
 }
 
 // Accept accepts an incoming QUIC connection
-func (p *Peer) Accept(ctx context.Context) (quic.Connection, error) {
+func (p *Peer) Accept(ctx context.Context) (*quic.Conn, error) {
 	if p.quicListener == nil {
 		return nil, fmt.Errorf("peer is not listening, call Listen first")
 	}
@@ -110,15 +125,47 @@ func (p *Peer) Accept(ctx context.Context) (quic.Connection, error) {
 	return p.quicListener.Accept(ctx)
 }
 
-// Connect connects to a remote peer
-func (p *Peer) Connect(remotePeerID string) (quic.Connection, error) {
-	// Get remote peer info
-	remotePeer, err := p.signalingClient.GetPeer(remotePeerID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get remote peer info: %w", err)
+// GetActualPort returns the actual port from the UDP listener
+func (p *Peer) GetActualPort() int {
+	if p.udpConn == nil {
+		return p.config.LocalPort
+	}
+	addr := p.udpConn.LocalAddr().(*net.UDPAddr)
+	return addr.Port
+}
+
+// UpdateSignalingClient updates the signaling client with a new URL
+func (p *Peer) UpdateSignalingClient(url string) {
+	p.config.SignalingURL = url
+	p.signalingClient = NewSignalingClient(url)
+	log.Printf("Updated signaling client to use %s", url)
+}
+
+// Connect connects to a remote peer.
+// If no candidates are provided via options, the peer's candidates are fetched from the signaling server.
+// Use WithCandidates to provide candidates directly and bypass the signaling server lookup.
+func (p *Peer) Connect(remotePeerID string, opts ...ConnectOption) (*quic.Conn, error) {
+	// Apply options
+	cfg := &connectConfig{}
+	for _, opt := range opts {
+		opt(cfg)
 	}
 
-	log.Printf("Found remote peer with %d candidates", len(remotePeer.Candidates))
+	var candidates []Candidate
+
+	// Use provided candidates or fetch from signaling server
+	if len(cfg.candidates) > 0 {
+		candidates = cfg.candidates
+		log.Printf("Using %d provided candidates", len(candidates))
+	} else {
+		// Get remote peer info from signaling server
+		remotePeer, err := p.signalingClient.GetPeer(remotePeerID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get remote peer info: %w", err)
+		}
+		candidates = remotePeer.Candidates
+		log.Printf("Found remote peer with %d candidates", len(candidates))
+	}
 
 	// Create UDP connection if not already created
 	if p.udpConn == nil {
@@ -126,6 +173,7 @@ func (p *Peer) Connect(remotePeerID string) (quic.Connection, error) {
 			IP:   net.IPv4zero,
 			Port: p.config.LocalPort,
 		}
+		var err error
 		p.udpConn, err = net.ListenUDP("udp4", udpAddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create UDP socket: %w", err)
@@ -134,7 +182,7 @@ func (p *Peer) Connect(remotePeerID string) (quic.Connection, error) {
 
 	// Perform UDP hole-punching
 	log.Println("Performing UDP hole-punch...")
-	if err := p.holePunch(remotePeer.Candidates); err != nil {
+	if err := p.holePunch(candidates); err != nil {
 		return nil, fmt.Errorf("hole-punch failed: %w", err)
 	}
 
@@ -143,7 +191,7 @@ func (p *Peer) Connect(remotePeerID string) (quic.Connection, error) {
 
 	// Attempt QUIC connection
 	log.Println("Attempting QUIC connection...")
-	return p.connectQUIC(remotePeer.Candidates)
+	return p.connectQUIC(candidates)
 }
 
 // ContinuousHolePunch continuously polls for peers and sends punch packets
@@ -204,6 +252,11 @@ func (p *Peer) Close() error {
 	return nil
 }
 
+// GetUDPConn returns the underlying UDP connection for manual hole-punching
+func (p *Peer) GetUDPConn() *net.UDPConn {
+	return p.udpConn
+}
+
 // holePunch performs UDP hole-punching to remote candidates
 func (p *Peer) holePunch(remoteCandidates []Candidate) error {
 	for _, candidate := range remoteCandidates {
@@ -229,7 +282,7 @@ func (p *Peer) holePunch(remoteCandidates []Candidate) error {
 }
 
 // connectQUIC attempts to connect to remote candidates via QUIC
-func (p *Peer) connectQUIC(remoteCandidates []Candidate) (quic.Connection, error) {
+func (p *Peer) connectQUIC(remoteCandidates []Candidate) (*quic.Conn, error) {
 	for _, candidate := range remoteCandidates {
 		addr := fmt.Sprintf("%s:%d", candidate.IP, candidate.Port)
 		log.Printf("Attempting QUIC connection to %s", addr)
@@ -243,7 +296,13 @@ func (p *Peer) connectQUIC(remoteCandidates []Candidate) (quic.Connection, error
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		quicConn, err := quic.Dial(ctx, p.udpConn, remoteAddr, p.tlsConfig, nil)
+		// Configure QUIC with extended idle timeout and keepalive
+		quicConfig := &quic.Config{
+			MaxIdleTimeout:  5 * time.Minute,  // Extended idle timeout
+			KeepAlivePeriod: 30 * time.Second, // Send keepalive pings
+		}
+
+		quicConn, err := quic.Dial(ctx, p.udpConn, remoteAddr, p.tlsConfig, quicConfig)
 		if err != nil {
 			log.Printf("Failed to connect to %s: %v", addr, err)
 			continue
@@ -258,12 +317,23 @@ func (p *Peer) connectQUIC(remoteCandidates []Candidate) (quic.Connection, error
 
 // discoverPublicIP uses STUN to discover public IP
 func discoverPublicIP(localPort int) (*Candidate, error) {
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: localPort})
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: 0}) // Use random port to avoid conflicts
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
+	return performSTUNDiscovery(conn, localPort)
+}
+
+// discoverPublicIPWithConn uses STUN with an existing UDP connection
+func discoverPublicIPWithConn(conn *net.UDPConn) (*Candidate, error) {
+	addr := conn.LocalAddr().(*net.UDPAddr)
+	return performSTUNDiscovery(conn, addr.Port)
+}
+
+// performSTUNDiscovery performs the actual STUN discovery
+func performSTUNDiscovery(conn *net.UDPConn, localPort int) (*Candidate, error) {
 	stunAddr, _ := net.ResolveUDPAddr("udp4", "stun.l.google.com:19302")
 
 	// Simple STUN binding request
@@ -274,8 +344,10 @@ func discoverPublicIP(localPort int) (*Candidate, error) {
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Transaction ID
 	}
 
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
-	_, err = conn.WriteToUDP(stunReq, stunAddr)
+	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	defer conn.SetDeadline(time.Time{}) // Clear deadline
+
+	_, err := conn.WriteToUDP(stunReq, stunAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -292,8 +364,8 @@ func discoverPublicIP(localPort int) (*Candidate, error) {
 		for i := 20; i < n-8; i++ {
 			if buf[i] == 0x00 && buf[i+1] == 0x20 {
 				// Found XOR-MAPPED-ADDRESS
-				port := int(buf[i+6])<<8 | int(buf[i+7])
-				port ^= 0x2112 // XOR with magic cookie
+				// port := int(buf[i+6])<<8 | int(buf[i+7])
+				// port ^= 0x2112 // XOR with magic cookie
 
 				ip := net.IPv4(
 					buf[i+8]^0x21,
@@ -302,9 +374,10 @@ func discoverPublicIP(localPort int) (*Candidate, error) {
 					buf[i+11]^0x42,
 				)
 
+				// Return discovered public IP with our local port
 				return &Candidate{
 					IP:   ip.String(),
-					Port: port,
+					Port: localPort,
 				}, nil
 			}
 		}

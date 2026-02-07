@@ -1,6 +1,8 @@
 package p2pquic
 
-import "time"
+import (
+	"time"
+)
 
 // Candidate represents a NAT traversal candidate (IP:Port pair)
 type Candidate struct {
@@ -28,4 +30,19 @@ type Config struct {
 
 	// EnableSTUN enables STUN-based public IP discovery
 	EnableSTUN bool
+}
+
+// connectConfig holds internal configuration for Connect calls
+type connectConfig struct {
+	candidates []Candidate
+}
+
+// ConnectOption is a functional option for configuring Connect calls
+type ConnectOption func(*connectConfig)
+
+// WithCandidates adds candidates to the connection attempt
+func WithCandidates(candidates ...Candidate) ConnectOption {
+	return func(c *connectConfig) {
+		c.candidates = append(c.candidates, candidates...)
+	}
 }

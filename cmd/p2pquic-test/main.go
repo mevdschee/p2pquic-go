@@ -101,7 +101,7 @@ func runServer(peer *p2pquic.Peer) {
 	}
 }
 
-func handleConnection(conn quic.Connection) {
+func handleConnection(conn *quic.Conn) {
 	defer conn.CloseWithError(0, "done")
 
 	stream, err := conn.AcceptStream(context.Background())

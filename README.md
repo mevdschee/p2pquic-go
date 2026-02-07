@@ -97,12 +97,20 @@ func main() {
 ### Client Mode
 
 ```go
-// Connect to a remote peer
+// Connect to a remote peer (candidates fetched from signaling server)
 conn, err := peer.Connect("remote-peer-id")
 if err != nil {
     log.Fatal(err)
 }
 defer conn.CloseWithError(0, "done")
+
+// Or provide candidates directly:
+conn, err := peer.Connect("remote-peer-id",
+    p2pquic.WithCandidates(
+        p2pquic.Candidate{IP: "192.168.1.100", Port: 9000},
+        p2pquic.Candidate{IP: "1.2.3.4", Port: 9000},
+    ),
+)
 
 // Open a stream and communicate
 stream, err := conn.OpenStreamSync(context.Background())
@@ -259,10 +267,16 @@ Main peer interface:
 - `DiscoverCandidates() ([]Candidate, error)` - Discover NAT candidates
 - `Register() error` - Register with signaling server
 - `Listen() error` - Start listening for incoming connections
-- `Accept(ctx context.Context) (quic.Connection, error)` - Accept incoming connection
-- `Connect(remotePeerID string) (quic.Connection, error)` - Connect to remote peer
+- `Accept(ctx context.Context) (*quic.Conn, error)` - Accept incoming connection
+- `Connect(remotePeerID string, opts ...ConnectOption) (*quic.Conn, error)` - Connect to remote peer
 - `ContinuousHolePunch(ctx context.Context)` - Continuously punch holes to discovered peers
 - `Close() error` - Close peer and release resources
+
+### `ConnectOption`
+
+Functional options for customizing connection behavior:
+
+- `WithCandidates(candidates ...Candidate)` - Provide candidates directly instead of fetching from signaling server
 
 ### `signaling.Server`
 
