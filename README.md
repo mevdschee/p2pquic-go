@@ -69,7 +69,12 @@ func main() {
     }
     defer peer.Close()
     
-    // Discover NAT candidates
+    // Server mode: listen for connections (must be before DiscoverCandidates)
+    if err := peer.Listen(); err != nil {
+        log.Fatal(err)
+    }
+    
+    // Discover NAT candidates (requires Listen or Bind first)
     candidates, err := peer.DiscoverCandidates()
     if err != nil {
         log.Fatal(err)
@@ -80,10 +85,8 @@ func main() {
         log.Fatal(err)
     }
     
-    // Server mode: listen for connections
-    if err := peer.Listen(); err != nil {
-        log.Fatal(err)
-    }
+    // Start continuous hole-punching in background
+    go peer.ContinuousHolePunch(context.Background())
     
     conn, err := peer.Accept(context.Background())
     if err != nil {
@@ -97,6 +100,22 @@ func main() {
 ### Client Mode
 
 ```go
+// Client mode: bind first (creates UDP socket only)
+if err := peer.Bind(); err != nil {
+    log.Fatal(err)
+}
+
+// Discover NAT candidates (requires Bind first)
+candidates, err := peer.DiscoverCandidates()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Register with signaling server
+if err := peer.Register(); err != nil {
+    log.Fatal(err)
+}
+
 // Connect to a remote peer (candidates fetched from signaling server)
 conn, err := peer.Connect("remote-peer-id")
 if err != nil {
