@@ -13,7 +13,7 @@ import (
 func main() {
 	mode := flag.String("mode", "server", "Mode: server or client")
 	peerID := flag.String("id", "", "This peer's ID (defaults to 'server' or 'client' based on mode)")
-	remotePeerID := flag.String("remote", "", "Remote peer ID (for client mode)")
+	remotePeerID := flag.String("remote", "server", "Remote peer ID (for client mode)")
 	signalingURL := flag.String("signaling", "http://localhost:8080", "Signaling server URL")
 	// IMPORTANT: Both client and server need a specific port for UDP hole-punching to work.
 	// The port is used for:
@@ -22,7 +22,7 @@ func main() {
 	// 3. Receiving the actual QUIC connection
 	// All three must use the SAME port, otherwise NAT mappings won't match.
 	// Different ports in examples (9000 vs 9001) are only for local testing on the same machine.
-	port := flag.Int("port", 9000, "Local UDP port (required for hole-punching)")
+	port := flag.Int("port", 0, "Local UDP port (0 = auto-assign)")
 	enableSTUN := flag.Bool("stun", true, "Enable STUN for public IP discovery")
 	flag.Parse()
 
@@ -84,9 +84,6 @@ func main() {
 	if *mode == "server" {
 		runServer(peer)
 	} else {
-		if *remotePeerID == "" {
-			log.Fatal("Remote peer ID required in client mode (use -remote flag)")
-		}
 		runClient(peer, *remotePeerID)
 	}
 }

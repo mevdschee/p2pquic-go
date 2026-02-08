@@ -179,23 +179,23 @@ Test peer-to-peer connections:
 go build ./cmd/p2pquic-test
 
 # Run server peer (defaults to ID "server")
-./p2pquic-test -mode server -port 0 -signaling http://localhost:8080
+./p2pquic-test -mode server -signaling http://localhost:8080
 ```
 
 **Client Mode:**
 
 ```bash
 # Run client peer connecting to "server" (defaults to ID "client")
-./p2pquic-test -mode client -remote server -port 0 -signaling http://localhost:8080
+./p2pquic-test -mode client -signaling http://localhost:8080
 ```
 
 **Flags:**
-- `-mode`: Operation mode (`server` or `client`)
-- `-id`: Unique peer identifier
-- `-remote`: Remote peer ID to connect to (client mode only)
-- `-port`: Local UDP port to bind to
-- `-signaling`: Signaling server URL
-- `-stun`: Enable STUN for public IP discovery (default: true)
+- `-mode`: Operation mode (default: `server`)
+- `-id`: Unique peer identifier (default: same as mode)
+- `-remote`: Remote peer ID to connect to, client mode only (default: `server`)
+- `-port`: Local UDP port to bind to (default: `0`, auto-assign)
+- `-signaling`: Signaling server URL (default: `http://localhost:8080`)
+- `-stun`: Enable STUN for public IP discovery (default: `true`)
 
 ## How It Works
 
