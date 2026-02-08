@@ -197,18 +197,6 @@ go build ./cmd/p2pquic-test
 - `-signaling`: Signaling server URL
 - `-stun`: Enable STUN for public IP discovery (default: true)
 
-> **Why does the client need a port?**
-> 
-> Both peers need a specific port for UDP hole-punching to work correctly:
-> 
-> 1. **STUN Discovery**: The peer discovers its public IP:port mapping using this port
-> 2. **UDP Hole-Punching**: Sends packets from this port to create NAT mappings
-> 3. **QUIC Connection**: Receives the actual connection on this same port
-> 
-> All three steps must use the **same port**, otherwise NAT mappings won't match and hole-punching will fail.
-> 
-> The different ports in examples (`9000` vs `9001`) are only needed for **local testing on the same machine**. In production across different networks, both peers can use the same port number (e.g., both use `9000`).
-
 ## How It Works
 
 1. **Candidate Discovery**: Each peer discovers its network candidates using STUN (public IP) and local network interfaces
