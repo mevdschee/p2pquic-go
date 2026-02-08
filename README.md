@@ -172,18 +172,25 @@ import "github.com/mevdschee/p2pquic-go/pkg/signaling"
 
 // Create signaling server
 server := signaling.NewServer()
+defer server.Close() // Stop cleanup goroutine on shutdown
 
-// Register a peer
+// Register a peer (registrations expire after 30 seconds)
 server.Register("peer-id", []signaling.Candidate{
     {IP: "192.168.1.100", Port: 9000},
 })
 
-// Get peer info
+// Get peer info (returns nil if expired)
 peer, exists := server.GetPeer("peer-id")
 
-// List all peers
+// List all peers (excludes expired)
 peers := server.GetAllPeers()
 ```
+
+**TTL Behavior:**
+- Peer registrations expire after **30 seconds**
+- Expired peers are automatically cleaned up every 5 seconds
+- `GetPeer` and `GetAllPeers` exclude expired registrations
+- Re-registering refreshes the TTL
 
 The HTTP server in `cmd/p2pquic-signal` is just a thin wrapper around this package.
 
@@ -286,12 +293,17 @@ Functional options for customizing connection behavior:
 
 Transport-agnostic signaling server (in `pkg/signaling`):
 
-- `NewServer() *Server` - Create a new signaling server
-- `Register(peerID string, candidates []Candidate) error` - Register a peer
-- `GetPeer(peerID string) (*PeerInfo, bool)` - Get peer information
-- `GetAllPeers() []*PeerInfo` - List all registered peers
+- `NewServer() *Server` - Create a new signaling server (starts background cleanup goroutine)
+- `Register(peerID string, candidates []Candidate) error` - Register a peer (refreshes TTL if already registered)
+- `GetPeer(peerID string) (*PeerInfo, bool)` - Get peer information (returns nil if expired)
+- `GetAllPeers() []*PeerInfo` - List all registered peers (excludes expired)
 - `RemovePeer(peerID string)` - Remove a peer from registry
-- `PeerCount() int` - Get number of registered peers
+- `PeerCount() int` - Get number of registered (non-expired) peers
+- `Close()` - Stop the cleanup goroutine (call on shutdown)
+
+**TTL Constants:**
+- `peerTTL = 30s` - Time-to-live for peer registrations
+- `cleanupInterval = 5s` - How often expired peers are removed
 
 ## Testing NAT Traversal
 
